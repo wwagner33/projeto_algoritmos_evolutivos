@@ -1,0 +1,224 @@
+import pygame
+import sys
+import random
+import time
+import csv
+import os
+from datetime import datetime
+
+# ─── CONFIGURAÇÕES GERAIS ───────────────────────────────────────────────────────
+GRID_WIDTH, GRID_HEIGHT = 40, 30
+CELL_SIZE = 20
+FPS = 20
+NUM_OBSTACLES = 100  # mais obstáculos para aumentar chance de falha
+NUM_AGENTS = 15      # menos agentes para tornar busca mais difícil
+NUM_TARGETS = 3      # mais alvos aumenta complexidade
+INFO_AREA_HEIGHT = 40
+
+NUM_RUNS = 10  # quantas execuções para estatísticas
+
+# ─── CONSTRAINTS ────────────────────────────────────────────────────────────────
+AGENT_BATTERY = 200      # bateria limitada
+AGENT_SPEED = 1          # velocidade reduzida
+TARGET_LIFETIME = 400    # alvo expira mais rápido
+MAX_STEPS = 1000         # passo máximo para impedir loops infinitos
+
+# ─── CORES ───────────────────────────────────────────────────────────────────────
+COLORS = {
+    'background': (245, 245, 245),
+    'grid':       (200, 200, 200),
+    'obstacle':   (50, 50, 50),
+    'agent':      (0, 100, 250),
+    'target':     (250, 50, 100),
+    'info_area':  (230, 230, 230),
+}
+
+# ─── CLASSES ─────────────────────────────────────────────────────────────────────
+class Agent:
+    def __init__(self, pos):
+        self.position = pos
+        self.speed = AGENT_SPEED
+        self.battery = AGENT_BATTERY
+        self.found = 0
+
+    def step(self, obstacles):
+        if self.battery <= 0:
+            return
+        for _ in range(self.speed):
+            x, y = self.position
+            moves = [(0,-1),(0,1),(-1,0),(1,0)]
+            random.shuffle(moves)
+            for dx, dy in moves:
+                nx, ny = x+dx, y+dy
+                if (0 <= nx < GRID_WIDTH and 0 <= ny < GRID_HEIGHT
+                        and (nx, ny) not in obstacles):
+                    self.position = (nx, ny)
+                    self.battery -= 1
+                    return
+
+class Target:
+    def __init__(self, pos):
+        self.position = pos
+        self.ttl = TARGET_LIFETIME
+        self.found = False
+
+    def step(self):
+        # decrementa tempo de vida e retorna False se expirou
+        self.ttl -= 1
+        return self.ttl > 0
+
+# ─── AUXILIARES ─────────────────────────────────────────────────────────────────
+def create_obstacles():
+    s = set()
+    while len(s) < NUM_OBSTACLES:
+        s.add((random.randrange(GRID_WIDTH), random.randrange(GRID_HEIGHT)))
+    return s
+
+def random_free_position(obstacles, occupied):
+    while True:
+        p = (random.randrange(GRID_WIDTH), random.randrange(GRID_HEIGHT))
+        if p not in obstacles and p not in occupied:
+            return p
+
+def log_simulation_result(sim_id, stats):
+    log_file = "data/simulation_log.csv"
+    os.makedirs(os.path.dirname(log_file), exist_ok=True)
+    exists = os.path.isfile(log_file)
+    with open(log_file, 'a', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=list(stats.keys()))
+        if not exists:
+            writer.writeheader()
+        writer.writerow(stats)
+    print(f"→ Sim #{sim_id} log gravado")
+
+# ─── PYGAME SETUP ────────────────────────────────────────────────────────────────
+pygame.init()
+screen = pygame.display.set_mode(
+    (GRID_WIDTH * CELL_SIZE, GRID_HEIGHT * CELL_SIZE + INFO_AREA_HEIGHT)
+)
+pygame.display.set_caption("Busca & Salvamento Com Falhas")
+clock = pygame.time.Clock()
+font = pygame.font.SysFont('Arial', 16)
+
+def draw_grid():
+    for x in range(0, GRID_WIDTH * CELL_SIZE, CELL_SIZE):
+        pygame.draw.line(screen, COLORS['grid'],
+                         (x, 0), (x, GRID_HEIGHT * CELL_SIZE))
+    for y in range(0, GRID_HEIGHT * CELL_SIZE, CELL_SIZE):
+        pygame.draw.line(screen, COLORS['grid'],
+                         (0, y), (GRID_WIDTH * CELL_SIZE, y))
+
+def draw_elements(obstacles, agents, targets):
+    for ox, oy in obstacles:
+        pygame.draw.rect(screen, COLORS['obstacle'],
+                         pygame.Rect(ox * CELL_SIZE, oy * CELL_SIZE,
+                                     CELL_SIZE, CELL_SIZE))
+    for t in targets:
+        if not t.found:
+            cx, cy = t.position
+            pygame.draw.circle(screen, COLORS['target'],
+                               (cx * CELL_SIZE + CELL_SIZE//2,
+                                cy * CELL_SIZE + CELL_SIZE//2),
+                               CELL_SIZE//3)
+    for a in agents:
+        cx, cy = a.position
+        pygame.draw.circle(screen, COLORS['agent'],
+                           (cx * CELL_SIZE + CELL_SIZE//2,
+                            cy * CELL_SIZE + CELL_SIZE//2),
+                           int(CELL_SIZE/2.5))
+
+# ─── SIMULAÇÃO ─────────────────────────────────────────────────────────────────
+for sim_id in range(1, NUM_RUNS + 1):
+    obstacles = create_obstacles()
+    occupied = set()
+    targets = []
+    for _ in range(NUM_TARGETS):
+        p = random_free_position(obstacles, occupied)
+        occupied.add(p)
+        targets.append(Target(p))
+    agents = []
+    for _ in range(NUM_AGENTS):
+        p = random_free_position(obstacles, occupied)
+        occupied.add(p)
+        agents.append(Agent(p))
+
+    start = time.time()
+    step = 0
+    sim_done = False
+    stats = {
+        'simulation_id': sim_id,
+        'timestamp': datetime.now().isoformat(),
+        'grid_size': f"{GRID_WIDTH}x{GRID_HEIGHT}",
+        'num_agents': NUM_AGENTS,
+        'num_targets': NUM_TARGETS,
+        'num_obstacles': NUM_OBSTACLES,
+        'search_time_seconds': 0,
+        'targets_found': 0,
+        'targets_expired': 0,
+        'avg_battery_remaining': 0,
+        'success': False
+    }
+
+    # loop de passos
+    while not sim_done and step < MAX_STEPS:
+        step += 1
+        for ev in pygame.event.get():
+            if ev.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+
+        # atualizar targets (ttl)
+        for t in targets[:]:
+            if not t.step():
+                targets.remove(t)
+                stats['targets_expired'] += 1
+
+        # mover agentes e checar encontro
+        for a in agents:
+            a.step(obstacles)
+            for t in targets:
+                if not t.found and a.position == t.position:
+                    t.found = True
+                    stats['targets_found'] += 1
+
+                    # condição de parada: todos os alvos encontrados
+                    if stats['targets_found'] == NUM_TARGETS:
+                        sim_done = True
+                        break
+            if sim_done:
+                break
+
+        # outra condição de parada: bateria esgotada
+        if not sim_done and all(a.battery <= 0 for a in agents):
+            sim_done = True
+
+        # desenhar
+        screen.fill(COLORS['background'])
+        draw_grid()
+        draw_elements(obstacles, agents, targets)
+        elapsed = time.time() - start
+
+        # infos
+        pygame.draw.rect(screen, COLORS['info_area'],
+                         pygame.Rect(0, GRID_HEIGHT * CELL_SIZE,
+                                     GRID_WIDTH * CELL_SIZE,
+                                     INFO_AREA_HEIGHT))
+        info = (f"Tempo: {elapsed:.2f}s   "
+                f"Encontrados: {stats['targets_found']} / {NUM_TARGETS}   "
+                f"Step {step}")
+        screen.blit(font.render(info, True, (10,10,10)),
+                    (10, GRID_HEIGHT * CELL_SIZE + 10))
+
+        pygame.display.flip()
+        clock.tick(FPS)
+
+    # preencher estatísticas finais
+    stats['search_time_seconds'] = round(time.time() - start, 2)
+    stats['avg_battery_remaining'] = round(
+        sum(a.battery for a in agents) / len(agents), 2)
+    stats['success'] = (stats['targets_found'] == NUM_TARGETS)
+
+    log_simulation_result(sim_id, stats)
+
+print("🎉 Simulações concluídas! Veja data/simulation_log.csv")
+pygame.quit()

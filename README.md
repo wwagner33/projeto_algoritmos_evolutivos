@@ -18,3 +18,70 @@
 |                                   | **Harmony Search (HS)**                | Composição musical                         | `pyharmonysearch`, `inspyred`                    | Acordes e notas vs aptidão (score)                            |
 | **5. Ecossistemas e Sociais**     | **Coevolutionary Algorithms**          | Espécies interagindo (predador-presa)      | `DEAP`, `Lea`, `eco-evo`                         | Populações separadas com fitness cruzado                      |
 |                                   | **Cultural Algorithms**                | Memória coletiva da população              | `cultural`, `inspyred`                           | Fitness individual vs conhecimento cultural médio             |
+
+Vamos usar uma grade 2D (grid) onde:
+
+0 = célula livre
+
+1 = obstáculo
+
+2 = ponto de partida
+
+3 = alvo
+
+A = posição do agente
+
+Representar cada célula da grid com cor:
+
+Branco = livre
+
+Cinza = obstáculo
+
+Verde = início
+
+Vermelho = alvo
+
+Azul = agente
+
+search_and_rescue_sim/
+│
+├── main.py # Script principal para execução das simulações
+│
+├── algorithms/ # Algoritmos bioinspirados (GA, PSO, ACO, etc.)
+│ ├── genetic_algorithm.py
+│ ├── particle_swarm.py
+│ ├── ant_colony.py
+│ └── base_algorithm.py
+│
+├── environment/ # Ambiente de simulação
+│ ├── environment.py
+│ ├── open_environment.py
+│ ├── closed_environment.py
+│ ├── grid.py
+│ └── target.py
+│
+├── agents/ # Definição dos agentes (buscadores e alvos)
+│ ├── agent.py
+│ └── search_agent.py
+│
+├── visualization/ # Visualização com Pygame
+│ └── pygame_visualizer.py
+│
+├── utils/ # Funções utilitárias e helpers
+│ ├── metrics.py
+│ └── helpers.py
+│
+├── data/ # Dados salvos (resultados, logs)
+│
+├── requirements.txt # Dependências do projeto
+└── README.md # Documentação do projeto
+
+Para os agentes:
+
+Implementar e detalhar cada algoritmo bioinspirado (GA, PSO, ACO).
+
+Definir estratégias de movimentação dos agentes.
+
+Criar módulos de métricas para medir eficiência dos algoritmos (tempo médio, sucesso, etc).
+
+Salvar e analisar logs e gráficos usando matplotlib.

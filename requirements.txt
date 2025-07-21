@@ -1,0 +1,6 @@
+pygame
+numpy
+pandas
+matplotlib
+streamlit
+altair
